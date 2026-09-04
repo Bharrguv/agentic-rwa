@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agentic RWA Risk Manager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/@solana/web3.js@1.98.4/lib/index.iife.min.js"></script>
+  <style>
+    :root {
+      --bg: #05060a;
+      --panel: rgba(16, 18, 28, 0.85);
+      --panel-solid: #10121c;
+      --line: rgba(153, 69, 255, 0.18);
+      --text: #f4f4f5;
+      --muted: #a1a1aa;
+      --dim: #71717a;
+      --solana-purple: #9945ff;
+      --solana-green: #14f195;
+      --warn: #fbbf24;
+      --radius: 14px;
+      --glow-purple: 0 0 40px rgba(153, 69, 255, 0.15);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; color: var(--text);
+      font-family: "DM Sans", system-ui, sans-serif; line-height: 1.45;
+      background: var(--bg); overflow-x: hidden;
+    }
+    .bg-mesh {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 80% 50% at 20% -10%, rgba(153, 69, 255, 0.22), transparent 55%),
+        radial-gradient(ellipse 60% 40% at 90% 10%, rgba(20, 241, 149, 0.12), transparent 50%),
+        radial-gradient(ellipse 50% 50% at 50% 100%, rgba(153, 69, 255, 0.08), transparent 55%),
+        var(--bg);
+    }
+    .bg-grid {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image:
+        linear-gradient(rgba(153, 69, 255, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(153, 69, 255, 0.04) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: radial-gradient(ellipse at center, black 20%, transparent 75%);
+      animation: gridPulse 12s ease-in-out infinite;
+    }
+    @keyframes gridPulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+    .orb {
+      position: fixed; border-radius: 50%; filter: blur(80px);
+      z-index: 0; pointer-events: none; animation: float 18s ease-in-out infinite;
+    }
+    .orb-1 { width: 320px; height: 320px; background: rgba(153, 69, 255, 0.2); top: -80px; left: -60px; }
+    .orb-2 { width: 280px; height: 280px; background: rgba(20, 241, 149, 0.12); bottom: 10%; right: -40px; animation-delay: -6s; }
+    @keyframes float {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      50% { transform: translate(20px, 30px) scale(1.08); }
+    }
+    .wrap { position: relative; z-index: 1; max-width: 920px; margin: 0 auto; padding: 28px 20px 72px; }
+    header {
+      display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between;
+      gap: 16px; margin-bottom: 22px; animation: fadeUp 0.5s ease both;
+    }
+    header h1 {
+      margin: 0 0 4px; font-size: 1.45rem; font-weight: 700; letter-spacing: -0.03em;
+      background: linear-gradient(105deg, #fff 0%, #c4b5fd 45%, #14f195 100%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    header .sub { margin: 0; color: var(--muted); font-size: 0.9rem; }
+    .header-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 500;
+      padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line);
+      background: rgba(16, 18, 28, 0.9); color: var(--muted); font-family: "IBM Plex Mono", monospace;
+    }
+    .pill.live {
+      border-color: rgba(20, 241, 149, 0.35); color: var(--solana-green);
+      box-shadow: 0 0 20px rgba(20, 241, 149, 0.1);
+    }
+    .pill .dot {
+      width: 7px; height: 7px; border-radius: 50%; background: var(--solana-green);
+      box-shadow: 0 0 8px var(--solana-green); animation: blink 2s ease infinite;
+    }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .btn-ghost {
+      font-family: inherit; font-size: 0.78rem; font-weight: 500; padding: 6px 12px;
+      border-radius: 999px; border: 1px solid var(--line); background: transparent;
+      color: var(--muted); cursor: pointer;
+    }
+    .btn-ghost:hover {
+      border-color: rgba(153, 69, 255, 0.45); color: var(--text);
+      background: rgba(153, 69, 255, 0.08);
+    }
+    .panel {
+      background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 16px 18px; margin-bottom: 12px; backdrop-filter: blur(12px);
+      animation: fadeUp 0.55s ease both;
+    }
+    .panel:hover { border-color: rgba(153, 69, 255, 0.28); box-shadow: var(--glow-purple); }
+    .panel h2 {
+      margin: 0 0 8px; font-size: 0.82rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--dim);
+    }
+    .hint { color: var(--muted); font-size: 0.88rem; margin: 0 0 12px; }
+    .steps-panel { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+    .steps { margin: 0; padding-left: 1.1rem; color: var(--muted); font-size: 0.88rem; }
+    .steps li { margin-bottom: 5px; }
+    .steps-links { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+    .steps-links a { color: var(--solana-green); font-size: 0.82rem; text-decoration: none; }
+    .grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0;
+      animation: fadeUp 0.6s ease both;
+    }
+    @media (max-width: 720px) { .grid { grid-template-columns: 1fr 1fr; } }
+    .stat {
+      background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 14px 16px; position: relative; overflow: hidden;
+    }
+    .stat label {
+      display: flex; align-items: center; gap: 6px; font-size: 0.68rem; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--dim); margin-bottom: 8px;
+    }
+    .stat strong { font-size: 1.4rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .stat .unit { font-size: 0.75rem; color: var(--dim); margin-top: 2px; }
+    .stat.health-ok strong { color: var(--solana-green); }
+    .stat.health-bad strong { color: var(--warn); }
+    .stat.decision strong {
+      font-size: 1.15rem;
+      background: linear-gradient(90deg, #c4b5fd, var(--solana-green));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .health-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .status-pill {
+      font-size: 0.75rem; font-weight: 600; padding: 4px 10px; border-radius: 999px;
+      border: 1px solid var(--line);
+    }
+    .status-pill.ok { color: var(--solana-green); border-color: rgba(20, 241, 149, 0.35); background: rgba(20, 241, 149, 0.08); }
+    .status-pill.bad { color: var(--warn); border-color: rgba(251, 191, 36, 0.35); background: rgba(251, 191, 36, 0.08); }
+    .bar-track { height: 10px; background: rgba(255, 255, 255, 0.06); border-radius: 99px; overflow: hidden; }
+    .bar-fill {
+      height: 100%; width: 50%; border-radius: 99px;
+      background: linear-gradient(90deg, var(--solana-purple), var(--solana-green));
+      box-shadow: 0 0 16px rgba(20, 241, 149, 0.4);
+      transition: width 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+      position: relative;
+    }
+    .bar-fill::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
+      animation: shimmer 2.2s ease infinite;
+    }
+    @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+    .bar-labels {
+      display: flex; justify-content: space-between; margin-top: 6px;
+      font-size: 0.7rem; color: var(--dim); font-family: "IBM Plex Mono", monospace;
+    }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    button {
+      font-family: inherit; font-size: 0.88rem; font-weight: 600; border-radius: 10px;
+      border: 1px solid var(--line); background: var(--panel-solid); color: var(--text);
+      padding: 10px 16px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+    }
+    button:hover:not(:disabled) { transform: translateY(-1px); border-color: rgba(153, 69, 255, 0.4); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.primary {
+      border: none; color: #0a0a0b;
+      background: linear-gradient(135deg, #14f195 0%, #9945ff 100%);
+      background-size: 160% 160%; animation: gradientShift 4s ease infinite;
+      box-shadow: 0 4px 24px rgba(20, 241, 149, 0.25);
+    }
+    @keyframes gradientShift {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+    button.primary.loading .icon-spin { animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    button.danger {
+      border-color: rgba(248, 113, 113, 0.3); background: rgba(248, 113, 113, 0.08); color: #fecaca;
+    }
+    .decision-banner {
+      display: none; align-items: flex-start; gap: 12px; padding: 14px 16px;
+      border-radius: var(--radius); border: 1px solid rgba(20, 241, 149, 0.25);
+      background: linear-gradient(135deg, rgba(20, 241, 149, 0.08), rgba(153, 69, 255, 0.08));
+      margin-bottom: 12px;
+    }
+    .decision-banner.show { display: flex; }
+    .decision-banner .badge {
+      font-size: 0.72rem; font-weight: 700; padding: 4px 10px; border-radius: 6px;
+      background: linear-gradient(135deg, var(--solana-purple), var(--solana-green)); color: #0a0a0b;
+    }
+    .decision-banner .body { font-size: 0.88rem; color: var(--muted); }
+    .decision-banner .body b { color: var(--text); }
+    .log-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    #log {
+      font-family: "IBM Plex Mono", monospace; font-size: 0.75rem; color: var(--muted);
+      max-height: 220px; overflow: auto;
+    }
+    #log .line { padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    #log .tag {
+      display: inline-block; font-size: 0.65rem; font-weight: 600;
+      padding: 1px 6px; border-radius: 4px; margin-right: 6px;
+    }
+    .tag-stress { background: rgba(248, 113, 113, 0.15); color: #fca5a5; }
+    .tag-decision { background: rgba(20, 241, 149, 0.15); color: var(--solana-green); }
+    .tag-info { background: rgba(153, 69, 255, 0.15); color: #c4b5fd; }
+    .tag-system { background: rgba(255,255,255,0.06); color: var(--dim); }
+    .tag-wallet { background: rgba(20, 241, 149, 0.12); color: var(--solana-green); }
+    .network-panel { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    @media (max-width: 600px) { .network-panel { grid-template-columns: 1fr; } }
+    .network-panel .cell label {
+      display: block; font-size: 0.68rem; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--dim); margin-bottom: 4px;
+    }
+    .network-panel .cell span {
+      font-size: 0.85rem; font-family: "IBM Plex Mono", monospace; color: var(--text); word-break: break-all;
+    }
+    .toast { font-size: 0.8rem; color: var(--dim); min-height: 1.2em; margin-top: 10px; }
+    .wallet-meta { font-family: "IBM Plex Mono", monospace; font-size: 0.78rem; color: var(--muted); word-break: break-all; }
+    .wallet-meta div { margin-top: 6px; }
+
+    .site-footer {
+      margin-top: 28px;
+      padding: 20px 4px 8px;
+      border-top: 1px solid rgba(153, 69, 255, 0.2);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      animation: fadeUp 0.6s ease both;
+    }
+    .site-footer .cred {
+      font-size: 0.82rem;
+      color: var(--dim);
+    }
+    .site-footer .cred strong {
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .site-footer .links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .site-footer a {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--solana-green);
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(20, 241, 149, 0.25);
+      background: rgba(20, 241, 149, 0.06);
+      transition: background 0.2s, border-color 0.2s, color 0.2s;
+    }
+    .site-footer a:hover {
+      background: rgba(153, 69, 255, 0.12);
+      border-color: rgba(153, 69, 255, 0.4);
+      color: #e9d5ff;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .pop { animation: pop 0.35s cubic-bezier(0.22, 1, 0.36, 1); }
+    @keyframes pop {
+      0% { transform: scale(1); } 40% { transform: scale(1.08); } 100% { transform: scale(1); }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-mesh"></div>
+  <div class="bg-grid"></div>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Agentic RWA Risk Manager</h1>
+        <p class="sub">Solana Devnet · Autonomous risk agent · Your own wallet</p>
+      </div>
+      <div class="header-actions">
+        <span class="pill live"><span class="dot"></span><span id="apiLabel">API…</span></span>
+        <span class="pill" id="sid"></span>
+        <button type="button" class="btn-ghost" id="btnNewSession">New session</button>
+      </div>
+    </header>
+
+    <div class="panel steps-panel">
+      <ol class="steps">
+        <li><b>Create wallet</b> — each visitor gets their own Devnet keypair in this browser.</li>
+        <li><b>Get SOL</b> — airdrop or faucet, then run the risk agent on your position.</li>
+        <li>On-chain program is shared; your simulator state is private to your address.</li>
+      </ol>
+      <div class="steps-links">
+        <a href="https://faucet.solana.com" target="_blank" rel="noreferrer">Solana faucet</a>
+        <a href="https://explorer.solana.com/address/39CDc5zXBMFkjqZoELL4bYr9VrMNZCk1e9tzGnrgmdpz?cluster=devnet" target="_blank" rel="noreferrer">Program on Explorer</a>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Your Devnet wallet</h2>
+      <p class="hint">Keypair stays in this browser only. Devnet demo — not for real funds. If airdrop fails, copy address into the faucet.</p>
+      <div class="actions" style="margin-bottom:10px">
+        <button type="button" class="primary" id="btnCreateWallet">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          Create wallet
+        </button>
+        <button type="button" id="btnAirdrop">Get Devnet SOL</button>
+        <button type="button" id="btnRefreshBal">Refresh balance</button>
+        <button type="button" id="btnCopyAddr">Copy address</button>
+        <button type="button" class="danger" id="btnBurnWallet">Reset wallet</button>
+      </div>
+      <div class="wallet-meta">
+        <div>Address: <span id="walletAddr" style="color:var(--text)">—</span></div>
+        <div>Balance: <span id="walletBal" style="color:var(--solana-green)">—</span> SOL</div>
+      </div>
+      <p class="toast" id="walletToast"></p>
+    </div>
+
+    <div class="grid">
+      <div class="stat">
+        <label>Collateral</label>
+        <strong id="collateral">100</strong>
+        <div class="unit">RWA</div>
+      </div>
+      <div class="stat">
+        <label>Borrowed</label>
+        <strong id="borrowed">70</strong>
+        <div class="unit">stable</div>
+      </div>
+      <div class="stat" id="healthCard">
+        <label>Health factor</label>
+        <strong id="health">1.000</strong>
+        <div class="unit">safe ≥ 1.25</div>
+      </div>
+      <div class="stat decision">
+        <label>Last decision</label>
+        <strong id="last">—</strong>
+        <div class="unit" id="lastSource">—</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="health-top">
+        <span class="status-pill ok" id="pill">Healthy</span>
+        <span style="font-size:0.75rem;color:var(--dim)">Safe zone ≥ 1.25</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" id="bar"></div></div>
+      <div class="bar-labels"><span>0.00</span><span>1.25</span><span>2.00</span></div>
+    </div>
+
+    <div class="panel">
+      <div class="actions">
+        <button type="button" class="primary" id="btnAgent">
+          <span class="icon-spin"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>
+          Run agent
+        </button>
+        <button type="button" class="danger" id="btnStress">Increase risk</button>
+        <button type="button" id="btnReset">Reset position</button>
+      </div>
+      <p class="toast" id="toast"></p>
+    </div>
+
+    <div class="decision-banner" id="banner">
+      <span class="badge" id="bannerBadge">REPAY</span>
+      <div class="body">
+        <b id="bannerAmount"></b>
+        <span id="bannerSource" style="font-size:0.7rem;color:var(--dim);margin-left:6px"></span>
+        <div id="bannerReason" style="margin-top:4px"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="log-head">
+        <h2 style="margin:0">Activity log</h2>
+        <button type="button" class="btn-ghost" id="btnClear" style="padding:4px 10px">Clear</button>
+      </div>
+      <div id="log"></div>
+    </div>
+
+    <div class="panel network-panel">
+      <div class="cell"><label>Cluster</label><span>devnet</span></div>
+      <div class="cell"><label>Program ID</label><span>39CDc5zX…mdpz</span></div>
+      <div class="cell"><label>LLM</label><span>Server-side (Groq)</span></div>
+    </div>
+
+    <footer class="site-footer">
+      <div class="cred">Built by <strong>Bharrguv Vakharia</strong> · Solana · RWA risk agent</div>
+      <div class="links">
+        <a href="https://www.linkedin.com/in/bharrguv" target="_blank" rel="noopener noreferrer" title="LinkedIn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-4 0v7h-4v-7a6 6 0 016-6zM2 9h4v12H2zM4 6a2 2 0 110-4 2 2 0 010 4z"/></svg>
+          LinkedIn
+        </a>
+        <a href="https://github.com/Bharrguv" target="_blank" rel="noopener noreferrer" title="GitHub">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+          GitHub
+        </a>
+      </div>
+    </footer>
+
+  </div>
+
+<script>
+(function () {
+  if (!window.solanaWeb3) {
+    document.body.insertAdjacentHTML("afterbegin",
+      "<p style='color:#f87171;padding:20px;font-family:sans-serif'>Failed to load @solana/web3.js from CDN. Check network.</p>");
+    return;
+  }
+  var API = localStorage.getItem("rwa_api") || "http://localhost:8787";
+  var LS_SECRET = "rwa_devnet_secret";
+  var LS_POS = "rwa_devnet_pos";
+  var LTV_BPS = 7000;
+  var Keypair = solanaWeb3.Keypair;
+  var Connection = solanaWeb3.Connection;
+  var LAMPORTS_PER_SOL = solanaWeb3.LAMPORTS_PER_SOL;
+  var connection = new Connection("https://api.devnet.solana.com", "confirmed");
+  var collateral = 100;
+  var borrowed = 70;
+  var keypair = null;
+
+  function makeSid() {
+    return "RWA-" + Date.now().toString(36).toUpperCase() + "-" +
+      Math.random().toString(36).slice(2, 7).toUpperCase();
+  }
+  function sid() {
+    var id = localStorage.getItem("rwa_session_id");
+    if (!id) { id = makeSid(); localStorage.setItem("rwa_session_id", id); }
+    return id;
+  }
+  function health() {
+    return (collateral * (LTV_BPS / 10000)) / Math.max(borrowed, 0.0001);
+  }
+  function posKey() { return keypair ? keypair.publicKey.toBase58() : null; }
+  function savePosition() {
+    var pk = posKey();
+    if (!pk) return;
+    var all = JSON.parse(localStorage.getItem(LS_POS) || "{}");
+    all[pk] = { collateral: collateral, borrowed: borrowed };
+    localStorage.setItem(LS_POS, JSON.stringify(all));
+  }
+  function loadPosition() {
+    var pk = posKey();
+    if (!pk) { collateral = 100; borrowed = 70; render(); return; }
+    var all = JSON.parse(localStorage.getItem(LS_POS) || "{}");
+    if (all[pk]) { collateral = all[pk].collateral; borrowed = all[pk].borrowed; }
+    else { collateral = 100; borrowed = 70; savePosition(); }
+    render();
+  }
+  function loadKeypair() {
+    var raw = localStorage.getItem(LS_SECRET);
+    if (!raw) return null;
+    try { return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(raw))); }
+    catch (e) { return null; }
+  }
+  function saveKeypair(kp) {
+    localStorage.setItem(LS_SECRET, JSON.stringify(Array.from(kp.secretKey)));
+  }
+  function logLine(tag, msg, tagClass) {
+    var el = document.getElementById("log");
+    var t = new Date().toLocaleTimeString();
+    var div = document.createElement("div");
+    div.className = "line";
+    div.innerHTML = '<span style="color:var(--dim)">' + t + '</span> <span class="tag ' + tagClass + '">' + tag + '</span> ' + msg;
+    el.insertBefore(div, el.firstChild);
+  }
+  function pop(id) {
+    var n = document.getElementById(id);
+    n.classList.remove("pop");
+    void n.offsetWidth;
+    n.classList.add("pop");
+  }
+  function render() {
+    var h = health();
+    document.getElementById("collateral").textContent = collateral;
+    document.getElementById("borrowed").textContent = borrowed;
+    document.getElementById("health").textContent = h.toFixed(3);
+    pop("borrowed"); pop("health");
+    var bar = document.getElementById("bar");
+    var pill = document.getElementById("pill");
+    var card = document.getElementById("healthCard");
+    bar.style.width = Math.min(100, (h / 2) * 100) + "%";
+    if (h < 1.25) {
+      bar.style.background = "linear-gradient(90deg, #f59e0b, #f87171)";
+      pill.textContent = "At risk"; pill.className = "status-pill bad";
+      card.className = "stat health-bad";
+    } else {
+      bar.style.background = "linear-gradient(90deg, #9945ff, #14f195)";
+      pill.textContent = "Healthy"; pill.className = "status-pill ok";
+      card.className = "stat health-ok";
+    }
+  }
+  function showBanner(action, amount, reason, source) {
+    var banner = document.getElementById("banner");
+    document.getElementById("bannerBadge").textContent = (action || "").toUpperCase();
+    document.getElementById("bannerAmount").textContent =
+      action === "repay" ? "Repay " + amount + " stable" : "Hold position";
+    document.getElementById("bannerSource").textContent = source ? "· " + source : "";
+    document.getElementById("bannerReason").textContent = reason || "";
+    banner.classList.remove("show");
+    void banner.offsetWidth;
+    banner.classList.add("show");
+  }
+  function applyDecision(d) {
+    var action = (d.action || "hold").toLowerCase();
+    document.getElementById("last").textContent = action.toUpperCase();
+    document.getElementById("lastSource").textContent = d.source || "—";
+    pop("last");
+    logLine("DECISION", action.toUpperCase() + (d.amount ? " " + d.amount : "") + " — " + d.reason + " · via " + (d.source || "agent"), "tag-decision");
+    if (action === "repay" && d.amount > 0) {
+      var amt = Math.min(Number(d.amount), borrowed);
+      borrowed = Math.max(0, borrowed - amt);
+      logLine("INFO", "Debt repaid: -" + amt + " stable. Health -> " + health().toFixed(2) + ".", "tag-info");
+    }
+    showBanner(action, d.amount || 0, d.reason, d.source);
+    savePosition();
+    render();
+  }
+  async function runAgent() {
+    var btn = document.getElementById("btnAgent");
+    btn.disabled = true;
+    btn.classList.add("loading");
+    document.getElementById("toast").textContent = "Agent evaluating position…";
+    logLine("INFO", "Agent invoked · health " + health().toFixed(2), "tag-info");
+    try {
+      var r = await fetch(API + "/api/agent/decide", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          collateral: collateral, borrowed: borrowed, ltvBps: LTV_BPS,
+          sessionId: sid(), wallet: posKey() || undefined
+        })
+      });
+      if (!r.ok) throw new Error("API " + r.status);
+      applyDecision(await r.json());
+      document.getElementById("toast").textContent = "";
+    } catch (e) {
+      var h = health();
+      var d = (h < 1.25 && borrowed > 0)
+        ? { action: "repay", amount: Math.max(1, Math.floor(borrowed * 0.3)), reason: "Health " + h.toFixed(2) + " below 1.25", source: "rules" }
+        : { action: "hold", amount: 0, reason: "Health " + h.toFixed(2) + " is acceptable", source: "rules" };
+      applyDecision(d);
+      document.getElementById("toast").textContent = "Backend unreachable — used local rules";
+    }
+    btn.disabled = false;
+    btn.classList.remove("loading");
+  }
+  function createWallet() {
+    keypair = Keypair.generate();
+    saveKeypair(keypair);
+    document.getElementById("walletAddr").textContent = keypair.publicKey.toBase58();
+    document.getElementById("walletToast").textContent = "New Devnet keypair saved in this browser only.";
+    loadPosition();
+    refreshBalance();
+    logLine("WALLET", "Created " + keypair.publicKey.toBase58().slice(0, 12) + "…", "tag-wallet");
+  }
+  async function refreshBalance() {
+    if (!keypair) { document.getElementById("walletToast").textContent = "Create a wallet first."; return; }
+    try {
+      var lamports = await connection.getBalance(keypair.publicKey);
+      document.getElementById("walletBal").textContent = (lamports / LAMPORTS_PER_SOL).toFixed(4);
+      document.getElementById("walletToast").textContent = "";
+    } catch (e) {
+      document.getElementById("walletToast").textContent = "Could not fetch balance.";
+    }
+  }
+  async function airdrop() {
+    if (!keypair) { document.getElementById("walletToast").textContent = "Create a wallet first."; return; }
+    document.getElementById("walletToast").textContent = "Requesting 1 SOL airdrop…";
+    try {
+      var sig = await connection.requestAirdrop(keypair.publicKey, 1 * LAMPORTS_PER_SOL);
+      await connection.confirmTransaction(sig, "confirmed");
+      document.getElementById("walletToast").textContent = "Airdrop confirmed.";
+      logLine("WALLET", "Airdrop ok", "tag-wallet");
+      refreshBalance();
+    } catch (e) {
+      document.getElementById("walletToast").textContent = "Airdrop limited. Copy address → faucet.solana.com";
+      logLine("WALLET", "Airdrop failed — use faucet", "tag-wallet");
+    }
+  }
+  function copyAddr() {
+    if (!keypair) { document.getElementById("walletToast").textContent = "Create a wallet first."; return; }
+    var addr = keypair.publicKey.toBase58();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(addr).then(function () {
+        document.getElementById("walletToast").textContent = "Address copied.";
+      });
+    } else {
+      document.getElementById("walletToast").textContent = addr;
+    }
+  }
+  function burnWallet() {
+    localStorage.removeItem(LS_SECRET);
+    keypair = null;
+    document.getElementById("walletAddr").textContent = "—";
+    document.getElementById("walletBal").textContent = "—";
+    collateral = 100; borrowed = 70; render();
+    document.getElementById("walletToast").textContent = "Wallet removed from this browser.";
+    logLine("WALLET", "Wallet reset", "tag-wallet");
+  }
+
+  document.getElementById("sid").textContent = sid();
+  document.getElementById("btnNewSession").onclick = function () {
+    var id = makeSid();
+    localStorage.setItem("rwa_session_id", id);
+    document.getElementById("sid").textContent = id;
+    logLine("SYSTEM", "New session " + id, "tag-system");
+  };
+  document.getElementById("btnStress").onclick = function () {
+    var prev = borrowed;
+    borrowed = Math.floor(collateral * 0.7 * 0.95);
+    logLine("STRESS", "Borrowed " + prev + " → " + borrowed + ". Health " + health().toFixed(2), "tag-stress");
+    savePosition(); render();
+  };
+  document.getElementById("btnReset").onclick = function () {
+    collateral = 100; borrowed = 70;
+    document.getElementById("last").textContent = "—";
+    document.getElementById("lastSource").textContent = "—";
+    document.getElementById("banner").classList.remove("show");
+    logLine("SYSTEM", "Position reset (100 / 70).", "tag-system");
+    savePosition(); render();
+  };
+  document.getElementById("btnClear").onclick = function () { document.getElementById("log").innerHTML = ""; };
+  document.getElementById("btnAgent").onclick = runAgent;
+  document.getElementById("btnCreateWallet").onclick = createWallet;
+  document.getElementById("btnAirdrop").onclick = airdrop;
+  document.getElementById("btnRefreshBal").onclick = refreshBalance;
+  document.getElementById("btnCopyAddr").onclick = copyAddr;
+  document.getElementById("btnBurnWallet").onclick = burnWallet;
+
+  keypair = loadKeypair();
+  if (keypair) {
+    document.getElementById("walletAddr").textContent = keypair.publicKey.toBase58();
+    loadPosition();
+    refreshBalance();
+    logLine("WALLET", "Restored " + keypair.publicKey.toBase58().slice(0, 12) + "…", "tag-wallet");
+  } else {
+    render();
+  }
+  fetch(API + "/api/health").then(function (r) { return r.json(); }).then(function (j) {
+    document.getElementById("apiLabel").textContent = j.groqConfigured ? "API · Groq on" : "API · rules";
+  }).catch(function () {
+    document.getElementById("apiLabel").textContent = "API offline";
+  });
+  logLine("SYSTEM", "Session " + sid() + " ready.", "tag-system");
+})();
+</script>
+</body>
+</html>
